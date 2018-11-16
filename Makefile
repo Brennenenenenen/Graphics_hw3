@@ -30,7 +30,7 @@ OPTIONS+=-Wall
 
 OBJECTS = $(patsubst %.cc,%,$(wildcard *.cc))
 
-all: cube2
+all: build #cube2
 
 common.o: common.cc common.h
 	$(CC) common.cc -c $(OPTIONS)
@@ -40,3 +40,8 @@ cube2: common.o common.h cube2.cc
 
 clean:
 	rm -f $(OBJECTS) *~
+
+build: cube2
+	./cube2
+
+

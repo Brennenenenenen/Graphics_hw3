@@ -17,6 +17,7 @@
 
 #include <Angel.h>
 #include "common.h"
+#include "camera.h"
 
 typedef Angel::vec4  color4;
 typedef Angel::vec4  point4;
@@ -24,10 +25,21 @@ typedef Angel::vec4  point4;
 /*
   Global variables used for transforms and rotations
 */
-const int NumVertices = 36; //(6 faces)(2 triangles/face)(3 vertices/triangle)
+const int NumVertices = 36;//36; //(6 faces)(2 triangles/face)(3 vertices/triangle)
 
 point4 points[NumVertices];
 color4 colors[NumVertices];
+
+// global variable to translate the camera based on
+// keyboard input
+GLfloat transx = 0.0;
+GLfloat transy = 0.0;
+GLfloat transz = 0.0;
+GLfloat camspeed = 3.0;
+
+//rotation of the camera angle
+GLfloat cam_angle = 0.0;
+GLfloat pitch = 5.0;
 
 // Viewing transformation parameters
 GLfloat radius = 3.0;
@@ -64,19 +76,20 @@ GLuint  projection; // projection matrix uniform shader variable location
 int Index = 0;
 
 // Vertices of a unit cube centered at origin, sides aligned with axes
-point4 vertices[16] = {
-    point4(-0.5, 0.0,  0.1, 1.0),
-    point4(-0.5, 0.5,  0.5, 1.0),
-    point4( 0.5, 0.5,  0.5, 1.0),
-    point4( 0.5, 0.0,  0.5, 1.0),
-    point4(-0.5, 0.0, -0.5, 1.0),
-    point4(-0.5, 0.5, -0.5, 1.0),
-    point4( 0.5, 0.5, -0.5, 1.0),
-    point4( 0.5, 0.0, -0.5, 1.0),
+point4 vertices[8] = {
+  
+    point4(-10.5, 0.0,  10.5, 1.0),
+    point4(-10.5, 0.01,  10.5, 1.0),
+    point4( 10.5, 0.01,  10.5, 1.0),
+    point4( 10.5, 0.0,  10.5, 1.0),
+    point4(-10.5, 0.0, -10.5, 1.0),
+    point4(-10.5, 0.01, -10.5, 1.0),
+    point4( 10.5, 0.01, -10.5, 1.0),
+    point4( 10.5, 0.0, -10.5, 1.0),
 };
 
 // RGBA olors
-color4 vertex_colors[16] = {
+color4 vertex_colors[8] = {
     color4(0.0, 0.0, 0.0, 1.0),  // black
     color4(1.0, 0.0, 0.0, 1.0),  // red
     color4(1.0, 1.0, 0.0, 1.0),  // yellow
@@ -157,29 +170,39 @@ void init()
 }
 
 //----------------------------------------------------------------------------
+
+GLfloat look = 0.0;
+GLfloat lr = 0.0;
 extern "C" void display()
 {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+//position
   point4  eye(mvx+radius*sin(theta)*cos(phi),
-	      radius*sin(theta)*sin(phi),
-	      mvz+radius*cos(theta),
-	      1.0);
-  point4  at(mvx, 0.0, mvz, 1.0);
+      radius*sin(theta)*sin(phi),
+	    mvz+radius*cos(theta),
+      1.0);
+  //target
+  point4  at(mvx, 0.0 , mvz, 1.0); //(0.0, 0.0, 0.0, 1.0) //1.0
+  //position
+  //point4  eye(0.0, 1.0, 2.5, 1.0);
+  //which way is up
   vec4    up(0.0, 1.0, 0.0, 0.0);
-
-  mat4  cv = LookAt(eye, at, up);
+ 
+  mat4  cv = LookAt(eye, at, up) * RotateY(cam_angle); //* Translate(transx, transy, transz);// * RotateY(cam_angle);
   glUniformMatrix4fv(camera_view, 1, GL_TRUE, cv);
 
   mat4 mv = RotateZ(angle);
   glUniformMatrix4fv(model_view, 1, GL_TRUE, mv);
 
-  mat4  p = Perspective(fovy, aspect, zNear, zFar);
+  mat4  p = Perspective(fovy, aspect, zNear, zFar) * Translate(transx, transy, transz);
   glUniformMatrix4fv(projection, 1, GL_TRUE, p);
 
   glDrawArrays(GL_TRIANGLES, 0, NumVertices);
 
-  //glDrawArrays(GL_TRIANGLES, 36, NumVertices);
+  mv = Translate(-10.5, 0.015, 10.5) * Scale(.03, 100.0, .01);
+  glUniformMatrix4fv(model_view, 1, GL_TRUE, mv);
+  glDrawArrays(GL_TRIANGLES, 0, NumVertices);
 
 
   // What does this draw?
@@ -208,7 +231,7 @@ extern "C" void keyboard(unsigned char key, int x, int y)
 {
   switch(key) {
   case 033: // Escape Key
-  case 'q': case 'Q':
+  case 'Q':
     exit(EXIT_SUCCESS);
     break;
 
@@ -216,36 +239,15 @@ extern "C" void keyboard(unsigned char key, int x, int y)
   case 'Z': zNear /= 1.1; zFar *= 1.1; break;
   case 'r': radius *= 1.5; break;
   case 'R': radius /= 1.5; break;
-  case 'o': theta += dr; break;
-  case 'O': theta -= dr; break;
-  case 'p': phi += dr; break;
-  case 'P': phi -= dr; break;
-  case 'v': 
-    fovy-=5; 
-    if (fovy < 0) {
-      // Min angle of view 1 degree
-      fovy = 1;
-    }
-    break;
-  case 'V': fovy+=5; break;
-    if (fovy > 179) {
-      // Max angle of view 179 degrees
-      fovy = 179;
-    }
-    break;
-
-  case ' ':  // reset values to their defaults
-    rotatep=!rotatep;
-    //    zNear = 0.1; 
-    //    zFar = 300.0;
-    zNear = 0.5;
-    zFar = 3.0;
-
-    radius = 3.0;
-    theta  = 0.0;
-    phi    = 0.0;
-    break;
-  }
+  case 'w': transz += (2 * dr); break;
+  case 's': transz -= (2 * dr); break;
+  case 'a': transx += (2 * dr); break;
+  case 'd': transx -= (2 * dr); break;
+  case 'q': cam_angle += (5 * dr); break;
+  case 'e': cam_angle -= (5 * dr); break;
+  case 'p': look += (2 * dr); break;
+  case 'o': look -= (2 * dr); break;
+}
 
   glutPostRedisplay();
 }
